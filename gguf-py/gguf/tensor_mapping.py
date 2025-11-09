@@ -1154,6 +1154,7 @@ class TensorNameMap:
             "model.mm_projector.mlp.mlp.{bid}",
             "vision_model.vision_adapter.mlp.fc{bid}", # llama 4
             "mlp1.{bid}", # InternVL
+            "model.projector.layers"
         ),
 
         MODEL_TENSOR.V_MMPROJ_PEG: (
@@ -1164,6 +1165,7 @@ class TensorNameMap:
             "vision_tower.vision_model.embeddings.class_embedding",
             "model.vision_tower.embeddings.cls_token", # Intern-S1
             "vision_model.class_embedding", # llama 4
+            "model.vision_model.embeddings.class_embedding"
         ),
 
         MODEL_TENSOR.V_ENC_EMBD_PATCH: (
@@ -1176,6 +1178,7 @@ class TensorNameMap:
             "vision_model.patch_embedding.linear", # llama 4
             "visual.patch_embed.proj", # qwen2vl
             "vision_tower.patch_embed.proj", # kimi-vl
+            "model.sam_model.patch_embed",
         ),
 
         MODEL_TENSOR.V_ENC_EMBD_POS: (
@@ -1185,6 +1188,7 @@ class TensorNameMap:
             "model.vision_model.embeddings.position_embedding", # SmolVLM
             "vision_model.positional_embedding_vlm", # llama 4
             "vision_tower.patch_embed.pos_emb", # kimi-vl
+            "model.sam_model.pos_embed",
         ),
 
         MODEL_TENSOR.V_ENC_ATTN_Q: (
@@ -1244,6 +1248,7 @@ class TensorNameMap:
             "vision_model.model.layers.{bid}.input_layernorm", # llama4
             "visual.blocks.{bid}.norm1", # qwen2vl
             "vision_tower.encoder.blocks.{bid}.norm0", # kimi-vl (norm0/norm1)
+            "model.vision_model.transformer.layers.{bid}.layer_norm1",
         ),
 
         MODEL_TENSOR.V_ENC_ATTN_O: (
@@ -1257,6 +1262,71 @@ class TensorNameMap:
             "vision_encoder.transformer.layers.{bid}.attention.wo", # pixtral
             "visual.blocks.{bid}.attn.proj", # qwen2vl
             "vision_tower.encoder.blocks.{bid}.wo", # kimi-vl
+            "model.vision_model.transformer.layers.{bid}.self_attn.out_proj"
+        ),
+
+        MODEL_TENSOR.V_IMAGE_NEWLINE:( 
+            "model.image_newline",
+        ),
+
+
+        MODEL_TENSOR.V_VIEW_SEPERATOR:( 
+            "model.view_seperator",
+        ),
+        
+        MODEL_TENSOR.V_ATTN_QKV: (
+            "model.sam_model.blocks.{bid}.attn.qkv",
+        ),
+
+
+        MODEL_TENSOR.V_FFN_UP: (
+            "model.sam_model.blocks.{bid}.mlp.lin1",
+        ),
+
+        MODEL_TENSOR.V_FFN_DOWN: (
+            "model.sam_model.blocks.{bid}.mlp.lin2",
+        ),
+        MODEL_TENSOR.V_NECK_CONV2D_0: ( 
+            "model.sam_model.neck.0",)
+        ,
+        MODEL_TENSOR.V_NECK_CONV2D_1: ( 
+            "model.sam_model.neck.2",)
+        ,
+        MODEL_TENSOR.V_NECK_LAYERNORM_2D_0: (
+            "model.sam_model.neck.1",
+        ),
+        MODEL_TENSOR.V_NECK_LAYERNORM_2D_1: (
+            "model.sam_model.neck.3",
+        ),
+
+        MODEL_TENSOR.V_NET_CONV2D_2: ( 
+            "model.sam_model.net_2",
+        ),
+        MODEL_TENSOR.V_NET_CONV2D_3: ( 
+            "model.sam_model.net_3",
+        ),
+
+        MODEL_TENSOR.V_EMBD_PATCH_PROJ: ( 
+            "model.sam_model.patch_embed.proj",
+        ),
+
+
+        MODEL_TENSOR.V_VIT_LAYERORM_0: ( 
+            "model.sam_model.blocks.{bid}.norm1",
+        ),
+
+
+        MODEL_TENSOR.V_VIT_LAYERORM_1: ( 
+            "model.sam_model.blocks.{bid}.norm2",
+        ),
+
+
+        MODEL_TENSOR.V_VIT_ATTN_PROJ: ( 
+            "model.sam_model.blocks.{bid}.attn.proj",
+        ),
+
+        MODEL_TENSOR.V_ATTN_QKV_PROJ: ( 
+            "model.vision_model.transformer.layers.{bid}.self_attn.qkv_proj",
         ),
 
         MODEL_TENSOR.V_ENC_POST_ATTN_NORM: (
@@ -1270,6 +1340,7 @@ class TensorNameMap:
             "vision_encoder.transformer.layers.{bid}.ffn_norm", # pixtral
             "visual.blocks.{bid}.norm2", # qwen2vl
             "vision_tower.encoder.blocks.{bid}.norm1", # kimi-vl (norm0/norm1)
+            "model.vision_model.transformer.layers.{bid}.layer_norm2"
         ),
 
         MODEL_TENSOR.V_ENC_FFN_UP: (
@@ -1283,6 +1354,7 @@ class TensorNameMap:
             "visual.blocks.{bid}.mlp.fc1", # qwen2vl
             "visual.blocks.{bid}.mlp.up_proj", # qwen2.5vl
             "vision_tower.encoder.blocks.{bid}.mlp.fc0", # kimi-vl (fc0/fc1)
+            "model.vision_model.transformer.layers.{bid}.mlp.fc1",
         ),
 
         MODEL_TENSOR.V_ENC_FFN_GATE: (
@@ -1302,6 +1374,7 @@ class TensorNameMap:
             "visual.blocks.{bid}.mlp.fc2", # qwen2vl
             "visual.blocks.{bid}.mlp.down_proj", # qwen2.5vl
             "vision_tower.encoder.blocks.{bid}.mlp.fc1", # kimi-vl (fc0/fc1)
+            "model.vision_model.transformer.layers.{bid}.mlp.fc2",
         ),
 
         MODEL_TENSOR.V_LAYER_SCALE_1: (
@@ -1319,6 +1392,7 @@ class TensorNameMap:
             "vision_tower.ln_pre", # pixtral-hf
             "vision_encoder.ln_pre", # pixtral
             "vision_model.layernorm_pre", # llama4
+            "model.vision_model.pre_layrnorm",
         ),
 
         MODEL_TENSOR.V_POST_NORM: (

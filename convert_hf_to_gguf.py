@@ -1485,6 +1485,9 @@ class MmprojModel(ModelBase):
         # TODO @ngxson : this is a hack to support both vision and audio encoders
         have_multiple_encoders = self.has_audio_encoder and self.has_vision_encoder
         self.block_count = 128 if have_multiple_encoders else self.find_hparam(self.n_block_keys, True)
+
+        if (self.block_count is None):
+            self.block_count = max(self.hparams["width"].get("clip-l-14-224").get("layers"), self.hparams["width"].get("sam_vit_b").get("layers"))
         self.tensor_map = gguf.get_tensor_name_map(gguf.MODEL_ARCH.MMPROJ, self.block_count)
 
         # load preprocessor config
@@ -1565,6 +1568,15 @@ class MmprojModel(ModelBase):
         key = next((k for k in keys if k in obj), None)
         if key is not None:
             return obj[key]
+        for key in keys:
+            if key := ( obj.get("width", {}).get("clip-l-14-224", {}).get(key)):
+                return key
+            else:
+                raise KeyError(f"could not find any of: {keys}")
+            
+        key = next((k for k in keys if k in self.global_config), None)
+        if key is not None:
+            return self.global_config[key]
         if optional:
             return None
         raise KeyError(f"could not find any of: {keys}")
@@ -6723,6 +6735,7 @@ class DeepseekModel(TextModel):
 @ModelBase.register(
     "DeepseekV2ForCausalLM",
     "DeepseekV3ForCausalLM",
+    "DeepseekOCRForCausalLM",
     "KimiVLForConditionalGeneration",
 )
 class DeepseekV2Model(TextModel):
@@ -6794,26 +6807,42 @@ class DeepseekV2Model(TextModel):
         self.gguf_writer.add_vocab_size(hparams["vocab_size"])
         if "q_lora_rank" in hparams and hparams["q_lora_rank"] is not None:
             self.gguf_writer.add_q_lora_rank(hparams["q_lora_rank"])
-        self.gguf_writer.add_kv_lora_rank(hparams["kv_lora_rank"])
+        else:
+            self.gguf_writer.add_q_lora_rank(1536)
+        # self.gguf_writer.add_kv_lora_rank(hparams["kv_lora_rank"])
 
         # note: deepseek2 using MLA converts into MQA with larger heads, then decompresses to MHA
-        self.gguf_writer.add_key_length(hparams["kv_lora_rank"] + hparams["qk_rope_head_dim"])
-        self.gguf_writer.add_value_length(hparams["kv_lora_rank"])
+        if (hparams["kv_lora_rank"] is not None):
+            self.gguf_writer.add_key_length(hparams["kv_lora_rank"] + hparams["qk_rope_head_dim"])
+            self.gguf_writer.add_kv_lora_rank(hparams["kv_lora_rank"])
+        else:
+            self.gguf_writer.add_key_length(hparams["qk_rope_head_dim"])
+            self.gguf_writer.add_kv_lora_rank(512)
+
+        # self.gguf_writer.add_value_length(hparams["kv_lora_rank"])
         self.gguf_writer.add_key_length_mla(hparams["qk_nope_head_dim"] + hparams["qk_rope_head_dim"])
         self.gguf_writer.add_value_length_mla(hparams["v_head_dim"])
 
         self.gguf_writer.add_expert_feed_forward_length(hparams["moe_intermediate_size"])
         self.gguf_writer.add_expert_count(hparams["n_routed_experts"])
         self.gguf_writer.add_expert_shared_count(hparams["n_shared_experts"])
-        self.gguf_writer.add_expert_weights_scale(hparams["routed_scaling_factor"])
-        self.gguf_writer.add_expert_weights_norm(hparams["norm_topk_prob"])
-
-        if hparams["scoring_func"] == "sigmoid":
-            self.gguf_writer.add_expert_gating_func(gguf.ExpertGatingFuncType.SIGMOID)
-        elif hparams["scoring_func"] == "softmax":
-            self.gguf_writer.add_expert_gating_func(gguf.ExpertGatingFuncType.SOFTMAX)
+        if ("routed_scaling_factor" not in hparams):
+            self.gguf_writer.add_expert_weights_scale(1.0)
         else:
-            raise ValueError(f"Unsupported scoring_func value: {hparams['scoring_func']}")
+            self.gguf_writer.add_expert_weights_scale(hparams["routed_scaling_factor"])
+        
+        if ("norm_topk_prob" in hparams):
+            self.gguf_writer.add_expert_weights_norm(hparams["norm_topk_prob"])
+        else:
+            self.gguf_writer.add_expert_weights_norm(False)
+
+
+        # if hparams["scoring_func"] == "sigmoid":
+            # self.gguf_writer.add_expert_gating_func(gguf.ExpertGatingFuncType.SIGMOID)
+        # elif hparams["scoring_func"] == "softmax":
+        self.gguf_writer.add_expert_gating_func(gguf.ExpertGatingFuncType.SOFTMAX)
+        # else:
+        #     raise ValueError(f"Unsupported scoring_func value: {hparams['scoring_func']}")
 
         self.gguf_writer.add_rope_dimension_count(hparams["qk_rope_head_dim"])
 
@@ -6823,12 +6852,16 @@ class DeepseekV2Model(TextModel):
             self.gguf_writer.add_rope_scaling_factor(rope_scaling["factor"])
             self.gguf_writer.add_rope_scaling_orig_ctx_len(rope_scaling["original_max_position_embeddings"])
             self.gguf_writer.add_rope_scaling_yarn_log_mul(0.1 * rope_scaling["mscale_all_dim"])
+        if ("rms_norm_eps" in hparams):
+            self.gguf_writer.add_layer_norm_rms_eps(hparams["rms_norm_eps"])
+        else:
+            self.gguf_writer.add_layer_norm_rms_eps(1e-06)
 
     _experts: list[dict[str, Tensor]] | None = None
 
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         # skip vision tensors and remove "language_model." for Kimi-VL
-        if "vision_tower" in name or "multi_modal_projector" in name:
+        if "vision_tower" in name or "multi_modal_projector" in name or "sam_model" in name or "vision_model" in name:
             return []
 
         if name.startswith("language_model."):
@@ -6897,6 +6930,9 @@ class DeepseekV2Model(TextModel):
                 (self.map_tensor_name(name_vb), v_b)
             ]
 
+        if (name.startswith("model.projector") or name.startswith("model.view_seperator") or name.startswith("model.image_newline")):
+            return []
+        
         return [(self.map_tensor_name(name), data_torch)]
 
     def prepare_tensors(self):
@@ -6908,6 +6944,157 @@ class DeepseekV2Model(TextModel):
             if len(experts) > 0:
                 raise ValueError(f"Unprocessed experts: {experts}")
 
+
+@ModelBase.register(
+    "DeepseekOCRForCausalLM"
+)
+class DeepseekOCR(MmprojModel):
+    model_arch = gguf.MODEL_ARCH.MMPROJ
+    has_vision_encoder = True
+
+    def _find_param(self, obj: dict[str, Any], keys: Iterable[str], optional: bool = False) -> Any:
+        key = next((k for k in keys if k in obj), None)
+        if key is not None:
+            return obj[key]
+
+        key = next((k for k in keys if k in self.global_config), None)
+        if key is not None:
+            return self.global_config[key]
+        if optional:
+            return None
+        for key in keys:
+            if key := ( obj.get("width", {}).get("clip-l-14-224", {}).get(key)):
+                return key
+            else:
+                raise KeyError(f"could not find any of: {keys}")
+    def set_gguf_parameters(self):
+        self.gguf_writer.add_file_type(self.ftype)
+
+        if self.has_vision_encoder:
+            self.gguf_writer.add_clip_has_vision_encoder(True)
+            self.gguf_writer.add_vision_projection_dim(self.n_embd_text)
+
+            # vision config
+            self.image_size = self.find_vparam(["image_size"])
+            self.gguf_writer.add_vision_image_size(self.image_size)
+            self.gguf_writer.add_vision_patch_size(self.find_vparam(["patch_size"]))
+            # self.gguf_writer.add_vision_embedding_length(self.find_vparam(["hidden_size"]))
+            self.gguf_writer.add_vision_feed_forward_length(self.find_vparam(["intermediate_size"]))
+            # self.gguf_writer.add_vision_block_count(self.find_vparam(self.n_block_keys))
+            self.gguf_writer.add_vision_head_count(self.find_vparam(["heads"]))
+
+            # preprocessor config
+            image_mean = _MISTRAL_COMMON_DATASET_MEAN if self.is_mistral_format else self.preprocessor_config["image_mean"]
+            image_std = _MISTRAL_COMMON_DATASET_STD if self.is_mistral_format else self.preprocessor_config["image_std"]
+
+            self.gguf_writer.add_vision_image_mean(image_mean)
+            self.gguf_writer.add_vision_image_std(image_std)
+            print(f"{self.hparams=}")
+            hparams = self.hparams["width"]
+            self.gguf_writer.add_key_value("clip.width", hparams["clip-l-14-224"].get("width"), gguf.GGUFValueType.INT32)
+            self.gguf_writer.add_key_value("sam.downsample_channels", hparams["sam_vit_b"].get("downsample_channels"), gguf.GGUFValueType.ARRAY)
+            self.gguf_writer.add_key_value("sam.global_attn_indexes", hparams["sam_vit_b"].get("global_attn_indexes"), gguf.GGUFValueType.ARRAY)
+            self.gguf_writer.add_key_value("sam.heads", hparams["sam_vit_b"].get("heads"), gguf.GGUFValueType.INT32)
+            self.gguf_writer.add_key_value("sam.layers", hparams["sam_vit_b"].get("layers"), gguf.GGUFValueType.INT32)
+            self.gguf_writer.add_key_value("sam.width", hparams["sam_vit_b"].get("width"), gguf.GGUFValueType.INT32)
+
+
+
+
+    _experts: list[dict[str, Tensor]] | None = None
+
+    def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+        # skip vision tensors and remove "language_model." for Kimi-VL
+        if "vision_tower" in name or "multi_modal_projector" in name:
+            return []
+
+        if name.startswith("language_model."):
+            name = name.replace("language_model.", "")
+
+        # rename e_score_correction_bias tensors
+        if name.endswith("e_score_correction_bias"):
+            name = name.replace("e_score_correction_bias", "e_score_correction.bias")
+
+        # skip Multi-Token Prediction (MTP) layers
+        if ("num_hidden_layers" in self.hparams):
+            block_count = self.hparams["num_hidden_layers"]
+            match = re.match(r"model.layers.(\d+)", name)
+            if match and int(match.group(1)) >= block_count:
+                return []
+
+            # process the experts separately
+            if name.find("mlp.experts") != -1:
+                n_experts = self.hparams["n_routed_experts"]
+                assert bid is not None
+
+                if self._experts is None:
+                    self._experts = [{} for _ in range(self.block_count)]
+
+                self._experts[bid][name] = data_torch
+
+                if len(self._experts[bid]) >= n_experts * 3:
+                    tensors: list[tuple[str, Tensor]] = []
+
+                    # merge the experts into a single 3d tensor
+                    for w_name in ["down_proj", "gate_proj", "up_proj"]:
+                        datas: list[Tensor] = []
+
+                        for xid in range(n_experts):
+                            ename = f"model.layers.{bid}.mlp.experts.{xid}.{w_name}.weight"
+                            datas.append(self._experts[bid][ename])
+                            del self._experts[bid][ename]
+
+                        data_torch = torch.stack(datas, dim=0)
+
+                        merged_name = f"model.layers.{bid}.mlp.experts.{w_name}.weight"
+
+                        new_name = self.map_tensor_name(merged_name)
+
+                        tensors.append((new_name, data_torch))
+                    return tensors
+                else:
+                    return []
+
+
+        # if (name.startswith("lm_head.weight")):
+        #     return []
+        if (name.startswith("model.projector") or name.startswith("model.view_seperator") or name.startswith("model.image_newline")):
+            return [(self.map_tensor_name(name), data_torch)]
+        if not (name.startswith("model.sam_model") or (name.startswith("model.vision_model"))):
+            return []
+
+        if (name.endswith("attn.rel_pos_h") or name.endswith("attn.rel_pos_w")):
+            return []
+        # note: MLA with the absorption optimization, needs these two split and k_b_proj transposed
+        if name.endswith("kv_b_proj.weight"):
+            name_kb = name.replace("kv_b_proj", "k_b_proj")
+            name_vb = name.replace("kv_b_proj", "v_b_proj")
+
+            n_head_kv = self.hparams["num_key_value_heads"]
+            v_head_dim = self.hparams["v_head_dim"]
+            qk_nope_head_dim = self.hparams["qk_nope_head_dim"]
+
+            assert data_torch.shape[0] == n_head_kv * (v_head_dim + qk_nope_head_dim)
+
+            kv_b = data_torch.view(n_head_kv, v_head_dim + qk_nope_head_dim, data_torch.shape[-1])
+            k_b, v_b = torch.split(kv_b, [qk_nope_head_dim, v_head_dim], dim=1)
+            k_b = k_b.transpose(1, 2)
+
+            return [
+                (self.map_tensor_name(name_kb), k_b),
+                (self.map_tensor_name(name_vb), v_b)
+            ]
+
+        return [(self.map_tensor_name(name), data_torch)]
+
+    def prepare_tensors(self):
+        super().prepare_tensors()
+
+        if self._experts is not None:
+            # flatten `list[dict[str, Tensor]]` into `list[str]`
+            experts = [k for d in self._experts for k in d.keys()]
+            if len(experts) > 0:
+                raise ValueError(f"Unprocessed experts: {experts}")
 
 @ModelBase.register("Dots1ForCausalLM")
 class Dots1Model(Qwen2MoeModel):

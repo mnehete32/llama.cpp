@@ -384,6 +384,7 @@ class MODEL_ARCH(IntEnum):
     ARCTIC           = auto()
     DEEPSEEK         = auto()
     DEEPSEEK2        = auto()
+    # DEEPSEEKOCR      = auto()    
     CHATGLM          = auto()
     GLM4             = auto()
     GLM4_MOE         = auto()
@@ -430,6 +431,7 @@ class VISION_PROJECTOR_TYPE(IntEnum):
     GLM_EDGE  = auto()
     MERGER    = auto()
     GEMMA3    = auto()
+    # DEEPSEEKOCR = auto()
 
 
 class MODEL_TENSOR(IntEnum):
@@ -640,6 +642,25 @@ class MODEL_TENSOR(IntEnum):
     V_RESMPL_QUERY       = auto() # minicpmv
     V_TOK_EMBD_IMG_BREAK = auto() # pixtral
     V_MM_PATCH_MERGER    = auto() # mistral small 3.1
+    # ocr
+    V_IMAGE_NEWLINE      = auto()
+    V_VIEW_SEPERATOR     = auto()
+    V_ATTN_QKV           = auto()
+    V_FFN_UP             = auto()
+    V_FFN_DOWN           = auto()
+    V_NECK_CONV2D_0      = auto()
+    V_NECK_CONV2D_1      = auto()
+    V_NECK_LAYERNORM_2D_0 = auto()
+    V_NECK_LAYERNORM_2D_1 = auto()
+    V_NET_CONV2D_2       = auto()
+    V_NET_CONV2D_3       = auto()
+    V_EMBD_PATCH_PROJ    = auto()
+    V_VIT_LAYERORM_0     = auto()
+    V_VIT_LAYERORM_1     = auto()
+    V_VIT_ATTN_PROJ      = auto()
+    V_ATTN_QKV_PROJ      = auto()
+
+
     # audio (mtmd)
     A_ENC_EMBD_POS       = auto()
     A_ENC_CONV1D         = auto()
@@ -986,6 +1007,25 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.V_RESMPL_QUERY:            "resampler.query",
     MODEL_TENSOR.V_TOK_EMBD_IMG_BREAK:      "v.token_embd.img_break", # pixtral
     MODEL_TENSOR.V_MM_PATCH_MERGER:         "mm.patch_merger", # mistral small 3.1
+
+    # ocr
+    MODEL_TENSOR.V_IMAGE_NEWLINE:            "model.image_newline",
+    MODEL_TENSOR.V_VIEW_SEPERATOR:           "model.view_seperator",
+    MODEL_TENSOR.V_ATTN_QKV:                 "model.sam_model.blocks.{bid}.attn.qkv",
+    MODEL_TENSOR.V_FFN_UP:                   "model.sam_model.blocks.{bid}.mlp.lin1",
+    MODEL_TENSOR.V_FFN_DOWN:                 "model.sam_model.blocks.{bid}.mlp.lin2",
+    MODEL_TENSOR.V_NECK_CONV2D_0:            "model.sam_model.neck.0",
+    MODEL_TENSOR.V_NECK_CONV2D_1:            "model.sam_model.neck.2",
+    MODEL_TENSOR.V_NECK_LAYERNORM_2D_0:      "model.sam_model.neck.1",
+    MODEL_TENSOR.V_NECK_LAYERNORM_2D_1:      "model.sam_model.neck.3",
+    MODEL_TENSOR.V_NET_CONV2D_2:             "model.sam_model.net_2",
+    MODEL_TENSOR.V_NET_CONV2D_3:             "model.sam_model.net_3",
+    MODEL_TENSOR.V_EMBD_PATCH_PROJ:          "model.sam_model.patch_embed.proj",
+    MODEL_TENSOR.V_VIT_LAYERORM_0:           "model.sam_model.blocks.{bid}.norm1",
+    MODEL_TENSOR.V_VIT_LAYERORM_1:           "model.sam_model.blocks.{bid}.norm2",
+    MODEL_TENSOR.V_VIT_ATTN_PROJ:            "model.sam_model.blocks.{bid}.attn.proj",
+    MODEL_TENSOR.V_ATTN_QKV_PROJ:            "model.vision_model.transformer.layers.{bid}.self_attn.qkv_proj",
+
     # audio (mtmd)
     MODEL_TENSOR.A_ENC_EMBD_POS:            "a.position_embd",
     MODEL_TENSOR.A_ENC_CONV1D:              "a.conv1d.{bid}",
@@ -1054,6 +1094,23 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.V_RESMPL_QUERY,
         MODEL_TENSOR.V_TOK_EMBD_IMG_BREAK,
         MODEL_TENSOR.V_MM_PATCH_MERGER,
+        # ocr
+        MODEL_TENSOR.V_IMAGE_NEWLINE,
+        MODEL_TENSOR.V_VIEW_SEPERATOR,
+        MODEL_TENSOR.V_ATTN_QKV,
+        MODEL_TENSOR.V_FFN_UP,
+        MODEL_TENSOR.V_FFN_DOWN,
+        MODEL_TENSOR.V_NECK_CONV2D_0,
+        MODEL_TENSOR.V_NECK_CONV2D_1,
+        MODEL_TENSOR.V_NECK_LAYERNORM_2D_0,
+        MODEL_TENSOR.V_NECK_LAYERNORM_2D_1,
+        MODEL_TENSOR.V_NET_CONV2D_2,
+        MODEL_TENSOR.V_NET_CONV2D_3,
+        MODEL_TENSOR.V_VIT_LAYERORM_0,
+        MODEL_TENSOR.V_VIT_LAYERORM_1,
+        MODEL_TENSOR.V_VIT_ATTN_PROJ,
+        MODEL_TENSOR.V_ATTN_QKV_PROJ,
+        MODEL_TENSOR.V_EMBD_PATCH_PROJ,
         # audio
         MODEL_TENSOR.A_ENC_EMBD_POS,
         MODEL_TENSOR.A_ENC_CONV1D,
@@ -2177,6 +2234,10 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_DOWN_SHEXP,
         MODEL_TENSOR.FFN_UP_SHEXP,
         MODEL_TENSOR.FFN_EXP_PROBS_B,
+        
+        # MODEL_TENSOR.V_IMAGE_NEWLINE,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_V,
     ],
     MODEL_ARCH.ERNIE4_5_MOE: [
         MODEL_TENSOR.TOKEN_EMBD,
